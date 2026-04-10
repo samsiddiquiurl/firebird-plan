@@ -537,30 +537,58 @@ ul.styled li::before {
 </head>
 <body>
 
+<!-- Welcome Overlay - One click starts everything -->
+<div id="welcomeOverlay" style="
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 9999;
+  background: linear-gradient(135deg, #0A0A0F 0%, #111118 50%, #0A0A0F 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: opacity 0.6s ease;
+">
+  <div style="text-align: center; max-width: 500px; padding: 24px;">
+    <div style="font-size: 48px; margin-bottom: 24px;">🔥</div>
+    <div style="font-family: 'Playfair Display', serif; font-size: clamp(28px, 5vw, 40px); font-weight: 800; color: #F1F1F4; line-height: 1.2; margin-bottom: 12px;">Revenue Activation<br>& <span style="background: linear-gradient(135deg, #E8620A, #F59E0B, #DC2626); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">Growth Engine</span></div>
+    <div style="font-size: 15px; color: #9B9BAD; margin-bottom: 40px;">A Structured Marketing System for Firebird Trading Systems</div>
+    <div id="playBtn" style="
+      display: inline-flex; align-items: center; gap: 12px;
+      padding: 18px 48px; border-radius: 12px;
+      background: linear-gradient(135deg, #E8620A 0%, #F59E0B 50%, #DC2626 100%);
+      color: white; font-size: 16px; font-weight: 700; letter-spacing: 0.5px;
+      box-shadow: 0 4px 30px rgba(232,98,10,0.4);
+      animation: pulseGlow 2s ease-in-out infinite;
+    ">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>
+      Play Walkthrough
+    </div>
+    <div style="font-size: 12px; color: #6B6B7B; margin-top: 16px; letter-spacing: 0.3px;">Sam will guide you through the plan as you read</div>
+  </div>
+</div>
+<style>
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 4px 30px rgba(232,98,10,0.4); }
+  50% { box-shadow: 0 8px 50px rgba(232,98,10,0.6); }
+}
+</style>
+
 <!-- Sticky Audio Bar -->
 <div class="audio-bar" id="audioBar">
   <div class="flame-icon">🔥</div>
   <div class="audio-info">
     <div class="audio-title">Sam — Strategy Walkthrough</div>
-    <div class="audio-subtitle">Play while you read</div>
+    <div class="audio-subtitle">Playing while you read</div>
   </div>
-  <!-- Replace the placeholder below with: <audio controls autoplay src="YOUR_AUDIO_FILE.mp3"></audio> -->
   <audio id="mainAudio" controls src="audio.mp3" style="flex: 2; max-width: 500px; height: 36px;"></audio>
 </div>
 <script>
-// Autoplay with unmuted after small delay
-window.addEventListener('load', function() {
+// Welcome overlay click starts audio and reveals content
+document.getElementById('welcomeOverlay').addEventListener('click', function() {
+  var overlay = this;
+  var audio = document.getElementById('mainAudio');
+  audio.volume = 1.0;
+  audio.play();
+  overlay.style.opacity = '0';
   setTimeout(function() {
-    var audio = document.getElementById('mainAudio');
-    audio.muted = false;
-    audio.volume = 1.0;
-    audio.play().catch(function() {
-      // If autoplay blocked, show a play prompt
-      audio.closest('.audio-bar').addEventListener('click', function() {
-        audio.play();
-      }, { once: true });
-    });
-  }, 1500);
+    overlay.style.display = 'none';
+  }, 600);
 });
 </script>
 
