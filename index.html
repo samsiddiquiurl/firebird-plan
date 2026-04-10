@@ -32,8 +32,8 @@ body {
   font-family: 'DM Sans', sans-serif;
   background: var(--bg-primary);
   color: var(--text-primary);
-  line-height: 1.75;
-  font-size: 16px;
+  line-height: 1.8;
+  font-size: 18px;
   -webkit-font-smoothing: antialiased;
 }
 
@@ -241,9 +241,9 @@ body {
 
 p {
   color: var(--text-secondary);
-  margin-bottom: 16px;
-  font-size: 16px;
-  line-height: 1.8;
+  margin-bottom: 18px;
+  font-size: 18px;
+  line-height: 1.85;
 }
 p strong, li strong {
   color: var(--fire-amber);
@@ -316,8 +316,8 @@ ul.styled li {
   padding: 10px 0 10px 28px;
   position: relative;
   color: var(--text-secondary);
-  font-size: 15px;
-  line-height: 1.7;
+  font-size: 17px;
+  line-height: 1.75;
 }
 ul.styled li::before {
   content: '';
@@ -521,6 +521,9 @@ ul.styled li::before {
 
 /* Responsive */
 @media (max-width: 768px) {
+  body { font-size: 16px; }
+  p { font-size: 16px; }
+  ul.styled li { font-size: 15px; }
   .invest-grid { grid-template-columns: 1fr; }
   .kpi-grid { grid-template-columns: 1fr 1fr; }
   .flow { gap: 6px; }
@@ -1138,9 +1141,52 @@ document.getElementById('welcomeOverlay').addEventListener('click', function() {
 </div>
 
 <script>
-// Sticky audio bar shadow on scroll
-const audioBar = document.getElementById('audioBar');
-window.addEventListener('scroll', () => {
+// ========================================
+// 1. WEBHOOK TRACKING — Instant notification + time tracking
+// ========================================
+(function() {
+  var webhookUrl = 'https://hook.us2.make.com/q5duxd9ul42wefmkvrlcghvv1n8li7ht';
+  var startTime = Date.now();
+
+  // Send visit notification immediately
+  fetch(webhookUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      event: 'page_opened',
+      timestamp: new Date().toISOString(),
+      userAgent: navigator.userAgent,
+      referrer: document.referrer || 'direct',
+      screenWidth: screen.width,
+      screenHeight: screen.height
+    })
+  }).catch(function() {});
+
+  // Send time spent when leaving
+  function sendTimeSpent() {
+    var seconds = Math.round((Date.now() - startTime) / 1000);
+    var minutes = Math.floor(seconds / 60);
+    var remainingSeconds = seconds % 60;
+    navigator.sendBeacon(webhookUrl, JSON.stringify({
+      event: 'page_closed',
+      timestamp: new Date().toISOString(),
+      timeSpentSeconds: seconds,
+      timeSpentFormatted: minutes + 'm ' + remainingSeconds + 's',
+      scrollDepth: Math.round((window.scrollY + window.innerHeight) / document.body.scrollHeight * 100) + '%'
+    }));
+  }
+
+  window.addEventListener('beforeunload', sendTimeSpent);
+  document.addEventListener('visibilitychange', function() {
+    if (document.visibilityState === 'hidden') sendTimeSpent();
+  });
+})();
+
+// ========================================
+// 2. STICKY AUDIO BAR SHADOW
+// ========================================
+var audioBar = document.getElementById('audioBar');
+window.addEventListener('scroll', function() {
   if (window.scrollY > 20) {
     audioBar.classList.add('scrolled');
   } else {
@@ -1148,9 +1194,11 @@ window.addEventListener('scroll', () => {
   }
 });
 
-// Fade-in sections on scroll
-const observer = new IntersectionObserver((entries) => {
-  entries.forEach(entry => {
+// ========================================
+// 3. FADE-IN SECTIONS ON SCROLL
+// ========================================
+var observer = new IntersectionObserver(function(entries) {
+  entries.forEach(function(entry) {
     if (entry.isIntersecting) {
       entry.target.style.opacity = '1';
       entry.target.style.transform = 'translateY(0)';
@@ -1158,12 +1206,78 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, { threshold: 0.1 });
 
-document.querySelectorAll('.section, .card').forEach(el => {
+document.querySelectorAll('.section, .card').forEach(function(el) {
   el.style.opacity = '0';
   el.style.transform = 'translateY(20px)';
   el.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
   observer.observe(el);
 });
+
+// ========================================
+// 4. SOFT AUTO-SCROLL SYNCED TO AUDIO
+// ========================================
+(function() {
+  var audio = document.getElementById('mainAudio');
+  if (!audio) return;
+
+  var isAutoScrolling = true;
+  var userScrollTimeout = null;
+  var lastUserScroll = 0;
+  var programmaticScroll = false;
+
+  // Detect user scroll — pause auto-scroll
+  window.addEventListener('scroll', function() {
+    if (programmaticScroll) return;
+    isAutoScrolling = false;
+    lastUserScroll = Date.now();
+
+    // Resume auto-scroll after 5 seconds of no user scrolling
+    clearTimeout(userScrollTimeout);
+    userScrollTimeout = setTimeout(function() {
+      isAutoScrolling = true;
+    }, 5000);
+  }, { passive: true });
+
+  // Also detect touch/wheel for immediate pause
+  window.addEventListener('wheel', function() { isAutoScrolling = false; lastUserScroll = Date.now(); clearTimeout(userScrollTimeout); userScrollTimeout = setTimeout(function() { isAutoScrolling = true; }, 5000); }, { passive: true });
+  window.addEventListener('touchmove', function() { isAutoScrolling = false; lastUserScroll = Date.now(); clearTimeout(userScrollTimeout); userScrollTimeout = setTimeout(function() { isAutoScrolling = true; }, 5000); }, { passive: true });
+
+  // Scroll position based on audio progress
+  function updateScroll() {
+    if (!isAutoScrolling || audio.paused || audio.duration === 0) {
+      requestAnimationFrame(updateScroll);
+      return;
+    }
+
+    var progress = audio.currentTime / audio.duration;
+    var maxScroll = document.body.scrollHeight - window.innerHeight;
+    var targetY = progress * maxScroll;
+
+    // Smooth approach to target position
+    var currentY = window.scrollY;
+    var diff = targetY - currentY;
+
+    if (Math.abs(diff) > 2) {
+      programmaticScroll = true;
+      window.scrollTo({
+        top: currentY + diff * 0.03,
+        behavior: 'auto'
+      });
+      setTimeout(function() { programmaticScroll = false; }, 50);
+    }
+
+    requestAnimationFrame(updateScroll);
+  }
+
+  // Start the scroll loop when audio plays
+  audio.addEventListener('play', function() {
+    isAutoScrolling = true;
+    requestAnimationFrame(updateScroll);
+  });
+
+  // Initial start
+  requestAnimationFrame(updateScroll);
+})();
 </script>
 
 </body>
