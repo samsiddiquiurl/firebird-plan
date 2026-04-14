@@ -1300,7 +1300,7 @@ document.querySelectorAll('.section, .card').forEach(function(el) {
     clearTimeout(userPauseTimer);
     userPauseTimer = setTimeout(function() {
       if (!audio.paused) autoScrollEnabled = true;
-    }, 5000);
+    }, 3000);
   }
   window.addEventListener('wheel', pauseScroll, { passive: true });
   window.addEventListener('touchmove', pauseScroll, { passive: true });
@@ -1308,18 +1308,17 @@ document.querySelectorAll('.section, .card').forEach(function(el) {
     if ([32,33,34,38,40].indexOf(e.keyCode) !== -1) pauseScroll();
   }, { passive: true });
 
-  // ---- SCROLL LOOP ----
+  // ---- SCROLL LOOP — CONSTANT SPEED ----
+  var CONSTANT_SPEED = 0.0007;
   function loop() {
     if (!autoScrollEnabled || audio.paused || !audio.duration) {
       requestAnimationFrame(loop);
       return;
     }
-    var progress = audio.currentTime / audio.duration;
     var maxScroll = document.body.scrollHeight - window.innerHeight;
-    var target = Math.floor(progress * maxScroll);
+    var step = maxScroll * CONSTANT_SPEED;
     var current = window.scrollY;
-    if (target > current) {
-      var step = Math.max((target - current) * SPEED, 0.5);
+    if (current < maxScroll) {
       window.scrollTo(0, current + step);
     }
     requestAnimationFrame(loop);
