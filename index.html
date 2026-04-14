@@ -582,17 +582,7 @@ ul.styled li::before {
   <audio id="mainAudio" controls src="audio.mp3" style="flex: 2; max-width: 500px; height: 36px;"></audio>
 </div>
 <script>
-// Welcome overlay click starts audio and reveals content
-document.getElementById('welcomeOverlay').addEventListener('click', function() {
-  var overlay = this;
-  var audio = document.getElementById('mainAudio');
-  audio.volume = 1.0;
-  audio.play();
-  overlay.style.opacity = '0';
-  setTimeout(function() {
-    overlay.style.display = 'none';
-  }, 600);
-});
+// Welcome overlay click is now handled by the auto-scroll system below
 </script>
 
 <div class="container">
@@ -1214,70 +1204,132 @@ document.querySelectorAll('.section, .card').forEach(function(el) {
 });
 
 // ========================================
-// 4. SOFT AUTO-SCROLL SYNCED TO AUDIO
+// 4. AUTO-SCROLL + RESUME/RESTART SYSTEM
 // ========================================
 (function() {
   var audio = document.getElementById('mainAudio');
   if (!audio) return;
 
-  var autoScrollEnabled = true;
+  var autoScrollEnabled = false;
   var userPauseTimer = null;
-  var isUserScrolling = false;
-  var lastScrollTop = 0;
+  var SCROLL_DELAY = 40000;
+  var RESUME_DELAY = 2000;
+  var SPEED = 0.03;
 
-  // Pause auto-scroll when user manually scrolls/touches
-  function pauseAutoScroll() {
+  // ---- COOKIE-BASED PROGRESS ----
+  function saveProgress() {
+    var d = JSON.stringify({ t: Math.floor(audio.currentTime), s: Math.floor(window.scrollY) });
+    document.cookie = 'fbp=' + encodeURIComponent(d) + ';max-age=604800;path=/;SameSite=Lax';
+  }
+  function getProgress() {
+    var m = document.cookie.match(/fbp=([^;]+)/);
+    if (m) { try { return JSON.parse(decodeURIComponent(m[1])); } catch(e) {} }
+    return null;
+  }
+  function clearProgress() {
+    document.cookie = 'fbp=;max-age=0;path=/';
+  }
+
+  // Save every 5 seconds while playing
+  setInterval(function() { if (!audio.paused && audio.currentTime > 0) saveProgress(); }, 5000);
+  window.addEventListener('beforeunload', function() { if (audio.currentTime > 0) saveProgress(); });
+
+  // ---- OVERLAY LOGIC ----
+  var overlay = document.getElementById('welcomeOverlay');
+  var saved = getProgress();
+
+  function fadeOutOverlay() {
+    overlay.style.opacity = '0';
+    setTimeout(function() { overlay.style.display = 'none'; }, 600);
+  }
+
+  function startFresh() {
+    clearProgress();
+    audio.currentTime = 0;
+    window.scrollTo(0, 0);
+    audio.volume = 1.0;
+    audio.play();
+    fadeOutOverlay();
+    setTimeout(function() { autoScrollEnabled = true; }, SCROLL_DELAY);
+  }
+
+  function resumeFromSaved(s) {
+    audio.currentTime = s.t;
+    window.scrollTo(0, s.s);
+    audio.volume = 1.0;
+    audio.play();
+    fadeOutOverlay();
+    setTimeout(function() { autoScrollEnabled = true; }, RESUME_DELAY);
+  }
+
+  if (saved && saved.t > 10) {
+    var mm = Math.floor(saved.t / 60);
+    var ss = Math.floor(saved.t % 60);
+    var ts = mm + ':' + (ss < 10 ? '0' : '') + ss;
+
+    overlay.innerHTML =
+      '<div style="text-align:center;max-width:520px;padding:24px;">' +
+        '<div style="font-size:48px;margin-bottom:24px;">\uD83D\uDD25</div>' +
+        '<div style="font-family:Playfair Display,serif;font-size:clamp(24px,4vw,34px);font-weight:800;color:#F1F1F4;line-height:1.2;margin-bottom:12px;">Welcome Back</div>' +
+        '<div style="font-size:15px;color:#9B9BAD;margin-bottom:40px;">You were at ' + ts + ' in the walkthrough</div>' +
+        '<div style="display:flex;flex-direction:column;gap:16px;align-items:center;">' +
+          '<div id="resumeBtn" style="display:inline-flex;align-items:center;gap:12px;padding:18px 48px;border-radius:12px;background:linear-gradient(135deg,#E8620A,#F59E0B,#DC2626);color:white;font-size:16px;font-weight:700;cursor:pointer;box-shadow:0 4px 30px rgba(232,98,10,0.4);animation:pulseGlow 2s ease-in-out infinite;">' +
+            '<svg width="20" height="20" viewBox="0 0 24 24" fill="white"><polygon points="5,3 19,12 5,21"/></svg>' +
+            'Resume Where I Left Off (' + ts + ')' +
+          '</div>' +
+          '<div id="restartBtn" style="display:inline-flex;align-items:center;gap:10px;padding:14px 40px;border-radius:10px;border:1px solid rgba(232,98,10,0.4);background:transparent;color:#F59E0B;font-size:14px;font-weight:600;cursor:pointer;">' +
+            'Start From the Beginning' +
+          '</div>' +
+        '</div>' +
+      '</div>';
+
+    document.getElementById('resumeBtn').addEventListener('click', function() { resumeFromSaved(saved); });
+    document.getElementById('restartBtn').addEventListener('click', startFresh);
+  } else {
+    // First visit — replace overlay click handler
+    var clone = overlay.cloneNode(true);
+    overlay.parentNode.replaceChild(clone, overlay);
+    overlay = clone;
+    overlay.id = 'welcomeOverlay';
+    overlay.addEventListener('click', startFresh);
+  }
+
+  // ---- MANUAL SCROLL PAUSE ----
+  function pauseScroll() {
     autoScrollEnabled = false;
-    isUserScrolling = true;
     clearTimeout(userPauseTimer);
     userPauseTimer = setTimeout(function() {
-      autoScrollEnabled = true;
-      isUserScrolling = false;
+      if (!audio.paused) autoScrollEnabled = true;
     }, 5000);
   }
-
-  // Detect manual scroll (wheel, touch, keyboard)
-  window.addEventListener('wheel', pauseAutoScroll, { passive: true });
-  window.addEventListener('touchmove', pauseAutoScroll, { passive: true });
+  window.addEventListener('wheel', pauseScroll, { passive: true });
+  window.addEventListener('touchmove', pauseScroll, { passive: true });
   window.addEventListener('keydown', function(e) {
-    if ([32, 33, 34, 38, 40].indexOf(e.keyCode) !== -1) pauseAutoScroll();
+    if ([32,33,34,38,40].indexOf(e.keyCode) !== -1) pauseScroll();
   }, { passive: true });
 
-  // Main scroll loop
-  function scrollLoop() {
+  // ---- SCROLL LOOP ----
+  function loop() {
     if (!autoScrollEnabled || audio.paused || !audio.duration) {
-      requestAnimationFrame(scrollLoop);
+      requestAnimationFrame(loop);
       return;
     }
-
     var progress = audio.currentTime / audio.duration;
     var maxScroll = document.body.scrollHeight - window.innerHeight;
-    var targetY = Math.floor(progress * maxScroll);
-    var currentY = window.scrollY;
-
-    // Only scroll DOWNWARD — never pull the page back up
-    if (targetY > currentY) {
-      var diff = targetY - currentY;
-      // Faster easing — 12% of difference per frame for smooth but noticeable movement
-      var step = Math.max(diff * 0.12, 1);
-      window.scrollTo(0, currentY + step);
+    var target = Math.floor(progress * maxScroll);
+    var current = window.scrollY;
+    if (target > current) {
+      var step = Math.max((target - current) * SPEED, 0.5);
+      window.scrollTo(0, current + step);
     }
-
-    requestAnimationFrame(scrollLoop);
+    requestAnimationFrame(loop);
   }
+  requestAnimationFrame(loop);
 
-  // Start scroll loop when audio plays
+  audio.addEventListener('pause', function() { autoScrollEnabled = false; });
   audio.addEventListener('play', function() {
-    autoScrollEnabled = true;
-    requestAnimationFrame(scrollLoop);
+    if (audio.currentTime > 5) setTimeout(function() { autoScrollEnabled = true; }, RESUME_DELAY);
   });
-
-  audio.addEventListener('pause', function() {
-    // Stop scrolling when audio is paused
-  });
-
-  // Kick off the loop
-  requestAnimationFrame(scrollLoop);
 })();
 </script>
 
