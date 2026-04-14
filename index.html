@@ -1220,63 +1220,64 @@ document.querySelectorAll('.section, .card').forEach(function(el) {
   var audio = document.getElementById('mainAudio');
   if (!audio) return;
 
-  var isAutoScrolling = true;
-  var userScrollTimeout = null;
-  var lastUserScroll = 0;
-  var programmaticScroll = false;
+  var autoScrollEnabled = true;
+  var userPauseTimer = null;
+  var isUserScrolling = false;
+  var lastScrollTop = 0;
 
-  // Detect user scroll — pause auto-scroll
-  window.addEventListener('scroll', function() {
-    if (programmaticScroll) return;
-    isAutoScrolling = false;
-    lastUserScroll = Date.now();
-
-    // Resume auto-scroll after 5 seconds of no user scrolling
-    clearTimeout(userScrollTimeout);
-    userScrollTimeout = setTimeout(function() {
-      isAutoScrolling = true;
+  // Pause auto-scroll when user manually scrolls/touches
+  function pauseAutoScroll() {
+    autoScrollEnabled = false;
+    isUserScrolling = true;
+    clearTimeout(userPauseTimer);
+    userPauseTimer = setTimeout(function() {
+      autoScrollEnabled = true;
+      isUserScrolling = false;
     }, 5000);
+  }
+
+  // Detect manual scroll (wheel, touch, keyboard)
+  window.addEventListener('wheel', pauseAutoScroll, { passive: true });
+  window.addEventListener('touchmove', pauseAutoScroll, { passive: true });
+  window.addEventListener('keydown', function(e) {
+    if ([32, 33, 34, 38, 40].indexOf(e.keyCode) !== -1) pauseAutoScroll();
   }, { passive: true });
 
-  // Also detect touch/wheel for immediate pause
-  window.addEventListener('wheel', function() { isAutoScrolling = false; lastUserScroll = Date.now(); clearTimeout(userScrollTimeout); userScrollTimeout = setTimeout(function() { isAutoScrolling = true; }, 5000); }, { passive: true });
-  window.addEventListener('touchmove', function() { isAutoScrolling = false; lastUserScroll = Date.now(); clearTimeout(userScrollTimeout); userScrollTimeout = setTimeout(function() { isAutoScrolling = true; }, 5000); }, { passive: true });
-
-  // Scroll position based on audio progress
-  function updateScroll() {
-    if (!isAutoScrolling || audio.paused || audio.duration === 0) {
-      requestAnimationFrame(updateScroll);
+  // Main scroll loop
+  function scrollLoop() {
+    if (!autoScrollEnabled || audio.paused || !audio.duration) {
+      requestAnimationFrame(scrollLoop);
       return;
     }
 
     var progress = audio.currentTime / audio.duration;
     var maxScroll = document.body.scrollHeight - window.innerHeight;
-    var targetY = progress * maxScroll;
-
-    // Smooth approach to target position
+    var targetY = Math.floor(progress * maxScroll);
     var currentY = window.scrollY;
-    var diff = targetY - currentY;
 
-    if (Math.abs(diff) > 2) {
-      programmaticScroll = true;
-      window.scrollTo({
-        top: currentY + diff * 0.03,
-        behavior: 'auto'
-      });
-      setTimeout(function() { programmaticScroll = false; }, 50);
+    // Only scroll DOWNWARD — never pull the page back up
+    if (targetY > currentY) {
+      var diff = targetY - currentY;
+      // Faster easing — 12% of difference per frame for smooth but noticeable movement
+      var step = Math.max(diff * 0.12, 1);
+      window.scrollTo(0, currentY + step);
     }
 
-    requestAnimationFrame(updateScroll);
+    requestAnimationFrame(scrollLoop);
   }
 
-  // Start the scroll loop when audio plays
+  // Start scroll loop when audio plays
   audio.addEventListener('play', function() {
-    isAutoScrolling = true;
-    requestAnimationFrame(updateScroll);
+    autoScrollEnabled = true;
+    requestAnimationFrame(scrollLoop);
   });
 
-  // Initial start
-  requestAnimationFrame(updateScroll);
+  audio.addEventListener('pause', function() {
+    // Stop scrolling when audio is paused
+  });
+
+  // Kick off the loop
+  requestAnimationFrame(scrollLoop);
 })();
 </script>
 
